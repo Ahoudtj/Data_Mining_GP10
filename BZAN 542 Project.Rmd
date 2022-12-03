@@ -1,0 +1,121 @@
+---
+title: "BZAN 542 Project"
+author: "Group 10"
+---
+
+```{r Load in data and packages}
+library(regclass)  
+library(rpart)
+library(randomForest)
+library(gbm)
+library(caret)
+library(pROC)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+Train_Backup <- read.csv("train.csv")
+TRAIN <- Train_Backup
+
+Holdout_Backup <- read.csv("test.csv")
+HOLDOUT <- Holdout_Backup
+
+```
+
+
+
+```{r Data Exploration}
+# Data is broken down by customer.
+TRAIN[which(TRAIN$Customer_ID == 3392),]
+# Each customer looks to have 8 months worth of credit data
+test <- TRAIN %>% group_by(Customer_ID) %>%  summarise(numObservations = n())
+table(test$numObservations)
+
+
+# The TRAIN dataset has an extra column (Credit_Score). This appears to be the variable that we will be predicting with the HOLDOUT data.
+colnames(TRAIN)[which(colnames(TRAIN)!=colnames(HOLDOUT))]
+
+# Checking for NAs in both datasets
+Train_NA <- sapply(TRAIN, function(y) sum(length(which(is.na(y))))) 
+data.frame(Train_NA) # No NAs in the TRAINING data
+
+Holdout_NA <- sapply(HOLDOUT, function(y) sum(length(which(is.na(y))))) 
+data.frame(Holdout_NA) # No NAs in the HOLDOUT data
+```
+
+Some questions to think about:
+
+-Data is designed to predict credit score (good, bad, standard).
+
+-What determines if a client qualifies for a credit card loan?
+
+-Does payment behavior correlate with loan acceptance?
+
+-How does bad credit affect loan acceptance?
+
+-How does occupation affect credit scores?
+
+```{r Data Cleaning}
+# Because the data was split before we got it, we must perform the same additional cleaning steps for both TRAIN and HOLDOUT.
+# We want to limit the amount of columns that use text, to give the model more data to make predictions on
+
+# Setting ID numbers to be factor data type
+TRAIN$ID <- as.factor(TRAIN$ID)
+TRAIN$Customer_ID <- as.factor(TRAIN$Customer_ID)
+
+HOLDOUT$ID <- as.factor(HOLDOUT$ID)
+HOLDOUT$Customer_ID <- as.factor(HOLDOUT$Customer_ID)
+
+
+# Change Credit_Mix ( Bad = 0, Standard = 1, Good = 2 )
+TRAIN$Credit_Mix <- ifelse(TRAIN$Credit_Mix == "Bad", 0, ifelse(TRAIN$Credit_Mix == "Standard", 1, 2))
+HOLDOUT$Credit_Mix <- ifelse(HOLDOUT$Credit_Mix == "Bad", 0, ifelse(HOLDOUT$Credit_Mix == "Standard", 1, 2))
+
+
+# Change Credit_Score ( Poor = 0, Standard = 1, Good = 2 )
+TRAIN$Credit_Score <- ifelse(TRAIN$Credit_Score == "Poor", 0, ifelse(TRAIN$Credit_Score == "Standard", 1, 2))
+
+
+# Changing Payment_Behavior from a word to a T/F
+TRAIN$High_spent_Large_value_payments <- ifelse(TRAIN$Payment_Behaviour == "High_spent_Large_value_payments", 1, 0)
+TRAIN$High_spent_Medium_value_payments <- ifelse(TRAIN$Payment_Behaviour == "High_spent_Medium_value_payments", 1, 0)
+TRAIN$High_spent_Small_value_payments <- ifelse(TRAIN$Payment_Behaviour == "High_spent_Small_value_payments", 1, 0)
+TRAIN$Low_spent_Large_value_payments <- ifelse(TRAIN$Payment_Behaviour == "Low_spent_Large_value_payments", 1, 0)
+TRAIN$Low_spent_Medium_value_payments <- ifelse(TRAIN$Payment_Behaviour == "Low_spent_Medium_value_payments", 1, 0)
+TRAIN$Low_spent_Small_value_payments <- ifelse(TRAIN$Payment_Behaviour == "Low_spent_Small_value_payments", 1, 0)
+TRAIN$Payment_Behaviour <- NULL
+
+HOLDOUT$High_spent_Large_value_payments <- ifelse(HOLDOUT$Payment_Behaviour == "High_spent_Large_value_payments", 1, 0)
+HOLDOUT$High_spent_Medium_value_payments <- ifelse(HOLDOUT$Payment_Behaviour == "High_spent_Medium_value_payments", 1, 0)
+HOLDOUT$High_spent_Small_value_payments <- ifelse(HOLDOUT$Payment_Behaviour == "High_spent_Small_value_payments", 1, 0)
+HOLDOUT$Low_spent_Large_value_payments <- ifelse(HOLDOUT$Payment_Behaviour == "Low_spent_Large_value_payments", 1, 0)
+HOLDOUT$Low_spent_Medium_value_payments <- ifelse(HOLDOUT$Payment_Behaviour == "Low_spent_Medium_value_payments", 1, 0)
+HOLDOUT$Low_spent_Small_value_payments <- ifelse(HOLDOUT$Payment_Behaviour == "Low_spent_Small_value_payments", 1, 0)
+HOLDOUT$Payment_Behaviour <- NULL
+
+
+# Dropping columns that won't be used in the model
+TRAIN$Name <- NULL
+TRAIN$Month <- NULL
+TRAIN$SSN <- NULL
+TRAIN$Occupation <- NULL
+TRAIN$Type_of_Loan <- NULL
+
+HOLDOUT$Name <- NULL
+HOLDOUT$Month <- NULL
+HOLDOUT$SSN <- NULL
+HOLDOUT$Occupation <- NULL
+HOLDOUT$Type_of_Loan <- NULL
+
+
+# Figure out what NM is and what to do with it
+table(TRAIN$Payment_of_Min_Amount)
+```
+
+
+```{r Visualization}
+
+```
+
+
+
