@@ -1,6 +1,7 @@
 ---
 title: "BZAN 542 Project"
 author: "Group 10"
+link: https://www.kaggle.com/datasets/clkmuhammed/creditscoreclassification
 ---
 
 ```{r Load in data and packages}
@@ -14,9 +15,16 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
+library(h2o) #automl https://github.com/h2oai/h2o-tutorials/tree/master/h2o-world-2017/automl
+#h2o.automl()
+
+
+#Training and holdout data are already defined on Kaggle
+# Create training and backup to training data
 Train_Backup <- read.csv("train.csv")
 TRAIN <- Train_Backup
 
+# Create holdout and backup to holdout
 Holdout_Backup <- read.csv("test.csv")
 HOLDOUT <- Holdout_Backup
 
@@ -68,12 +76,14 @@ HOLDOUT$Customer_ID <- as.factor(HOLDOUT$Customer_ID)
 
 
 # Change Credit_Mix ( Bad = 0, Standard = 1, Good = 2 )
-TRAIN$Credit_Mix <- ifelse(TRAIN$Credit_Mix == "Bad", 0, ifelse(TRAIN$Credit_Mix == "Standard", 1, 2))
+TRAIN$Credit_Mix <- as.factor(ifelse(TRAIN$Credit_Mix == "Bad", 0, ifelse(TRAIN$Credit_Mix == "Standard", 1, 2)))
 HOLDOUT$Credit_Mix <- ifelse(HOLDOUT$Credit_Mix == "Bad", 0, ifelse(HOLDOUT$Credit_Mix == "Standard", 1, 2))
 
 
-# Change Credit_Score ( Poor = 0, Standard = 1, Good = 2 )
-TRAIN$Credit_Score <- ifelse(TRAIN$Credit_Score == "Poor", 0, ifelse(TRAIN$Credit_Score == "Standard", 1, 2))
+# Group Good and Start Credit to be "Acceptable" and leave bad as "Unacceptable"
+table(TRAIN$Credit_Score)
+TRAIN$Credit_Score <- as.factor(ifelse(TRAIN$Credit_Score == "Poor", 0, 1))
+# Poor credit score would be acceptable, good or standard would be unacceptable
 
 
 # Changing Payment_Behavior from a word to a T/F
@@ -100,22 +110,92 @@ TRAIN$Month <- NULL
 TRAIN$SSN <- NULL
 TRAIN$Occupation <- NULL
 TRAIN$Type_of_Loan <- NULL
+# Only remove for the predictive model then add back
+TRAIN$ID <- NULL
+TRAIN$Customer_ID <- NULL
 
 HOLDOUT$Name <- NULL
 HOLDOUT$Month <- NULL
 HOLDOUT$SSN <- NULL
 HOLDOUT$Occupation <- NULL
 HOLDOUT$Type_of_Loan <- NULL
-
+# Only remove for the predictive model then add back
+HOLDOUT$ID <- NULL
+HOLDOUT$Customer_ID <- NULL
 
 # Figure out what NM is and what to do with it
-table(TRAIN$Payment_of_Min_Amount)
-```
-
-
-```{r Visualization}
+TRAIN$Payment_of_Min_Amount <- as.factor(TRAIN$Payment_of_Min_Amount)
+TRAIN$Payment_of_Min_Amount <- NULL
+HOLDOUT$Payment_of_Min_Amount <- NULL
 
 ```
 
 
+ML Modeling
+
+```{r Decision Tree}
+TREE <- rpart(Credit_Score~.,data=TRAIN) # Create Decision Tree Model
+visualize_model(TREE) # Visualize Decision Tree Model
+```
+
+```{r Random Forest}
+# # Tune parameters for Random Forest
+forestGrid <- expand.grid(mtry=c(1,3,5))
+fitControl <- trainControl(method="cv",number=5)
+
+FOREST <- train(Credit_Score~.,
+               data = TRAIN,
+               trControl=fitControl,
+               preProc=c("center","scale"),
+               method = "rf",
+               tuneGrid=forestGrid) # Create Random Forrest Model
+
+FOREST$results[rownames(FOREST$bestTune),]
+plot(FOREST) # Visualize Random Forest Model
+```
+
+
+```{r KNN}
+# fitControl <- trainControl(method="cv",number=5) 
+# 
+# # KNN
+# train(Credit_Score ~ .,
+#       data=TRAIN,
+#       method='knn',
+#       trControl = fitControl)
+
+```
+
+
+```{r Rpart}
+# Tune parameters for RPART
+rpartGrid <- expand.grid(cp=10^seq(-5,-1,by=0.2))
+fitControl <- trainControl(method="cv",number=5) 
+
+RPART <- train(Credit_Score~.,
+               data = TRAIN,
+               trControl=fitControl,
+               preProc=c("center","scale"),
+               method = "rpart",
+               tuneGrid=rpartGrid) # Create RPART model
+
+RPART$results[rownames(RPART$bestTune),] # finding best results from RPART model
+plot(RPART) # Visualization for RPART model
+```
+
+
+```{r SVM}
+# # SVM model parameters
+# svmGrid <- expand.grid(C=10^seq(-3.5,-1.5,by=.5))
+# fitControl <- trainControl(method="cv",number=5) 
+# 
+# SVM <- train(Credit_Score~.,
+#                data = TRAIN,
+#                trControl=fitControl,
+#                preProc=c("center","scale"),
+#                method = "svmLinear",
+#                tuneGrid=svmGrid) # create SVM Model
+# 
+# SVM$results # View results from SVM model
+```
 
