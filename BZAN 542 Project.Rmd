@@ -22,11 +22,17 @@ library(ggplot2)
 #Training and Holdout data are already defined on Kaggle
 # Create training and backup to training data
 Train_Backup <- read.csv("train.csv")
-TRAIN <- Train_Backup
+DATA <- Train_Backup
 
-# Create holdout and backup to holdout
-Holdout_Backup <- read.csv("test.csv")
-HOLDOUT <- Holdout_Backup
+# Loading in testing data and creating a backup
+Test_Backup <- read.csv("test.csv")
+TEST <- Test_Backup
+
+# Splitting Data into Training and Holdout sets
+train.rows <- sample(1:nrow(DATA), .7*nrow(DATA))
+
+TRAIN <- DATA[train.rows,]
+HOLDOUT <-  DATA[-train.rows,]
 
 ```
 
@@ -34,14 +40,14 @@ HOLDOUT <- Holdout_Backup
 
 ```{r Data Exploration}
 # Data is broken down by customer.
-TRAIN[which(TRAIN$Customer_ID == 3392),]
+DATA[which(DATA$Customer_ID == 3392),]
 # Each customer looks to have 8 months worth of credit data
-test <- TRAIN %>% group_by(Customer_ID) %>%  summarise(numObservations = n())
+test <- DATA %>% group_by(Customer_ID) %>%  summarise(numObservations = n())
 table(test$numObservations)
-
+# Customers observations will be separated in TRAINING and HOLDOUT because the records are randomly chosen
 
 # The TRAIN dataset has an extra column (Credit_Score). This appears to be the variable that we will be predicting with the HOLDOUT data.
-colnames(TRAIN)[which(colnames(TRAIN)!=colnames(HOLDOUT))]
+colnames(DATA)[which(colnames(DATA)!=colnames(TEST))]
 
 # Checking for NAs in both datasets
 Train_NA <- sapply(TRAIN, function(y) sum(length(which(is.na(y))))) 
@@ -53,8 +59,6 @@ data.frame(Holdout_NA) # No NAs in the HOLDOUT data
 
 Some questions to think about:
 
--Data is designed to predict credit score (good, bad, standard).
-
 -What determines if a client qualifies for a credit card loan?
 
 -Does payment behavior correlate with loan acceptance?
@@ -64,7 +68,9 @@ Some questions to think about:
 -How does occupation affect credit scores?
 
 ```{r Data Cleaning}
-# Because the data was split before we got it, we must perform the same additional cleaning steps for both TRAIN and HOLDOUT.
+# We received data for both training and testing. 
+# The Training data was split into the HOLDOUT and TRAIN data sets seen here
+# The TEST data set also needs to undergo the same cleaning process in order to be used by the model
 # We want to limit the amount of columns that use text, to give the model more data to make predictions on
 
 
@@ -75,15 +81,22 @@ TRAIN$Customer_ID <- as.factor(TRAIN$Customer_ID)
 HOLDOUT$ID <- as.factor(HOLDOUT$ID)
 HOLDOUT$Customer_ID <- as.factor(HOLDOUT$Customer_ID)
 
+TEST$ID <- as.factor(TEST$ID)
+TEST$Customer_ID <- as.factor(TEST$Customer_ID)
+
+
 # Group Good and Standard Credit to be "Acceptable" and leave bad as "Unacceptable"
 table(TRAIN$Credit_Score)
-TRAIN$Credit_Score <- as.factor(ifelse(TRAIN$Credit_Score == "Poor", "Unaccebtable", "Acceptable"))
+TRAIN$Credit_Score <- as.factor(ifelse(TRAIN$Credit_Score == "Poor", "Unacceptable", "Acceptable"))
+HOLDOUT$Credit_Score <- as.factor(ifelse(HOLDOUT$Credit_Score == "Poor", "Unacceptable", "Acceptable"))
 # Poor credit score would be acceptable, good or standard would be unacceptable
 
 
 # Change Credit_Mix ( Bad = 0, Standard = 1, Good = 2 )
 TRAIN$Credit_Mix <- as.factor(ifelse(TRAIN$Credit_Mix == "Bad", 0, ifelse(TRAIN$Credit_Mix == "Standard", 1, 2)))
 HOLDOUT$Credit_Mix <- as.factor(ifelse(HOLDOUT$Credit_Mix == "Bad", 0, ifelse(HOLDOUT$Credit_Mix == "Standard", 1, 2)))
+TEST$Credit_Mix <- as.factor(ifelse(TEST$Credit_Mix == "Bad", 0, ifelse(TEST$Credit_Mix == "Standard", 1, 2)))
+
 
 
 # Changing Payment_Behavior from a word to a T/F
@@ -103,6 +116,14 @@ HOLDOUT$Low_spent_Medium_value_payments <- ifelse(HOLDOUT$Payment_Behaviour == "
 HOLDOUT$Low_spent_Small_value_payments <- ifelse(HOLDOUT$Payment_Behaviour == "Low_spent_Small_value_payments", 1, 0)
 HOLDOUT$Payment_Behaviour <- NULL
 
+TEST$High_spent_Large_value_payments <- ifelse(TEST$Payment_Behaviour == "High_spent_Large_value_payments", 1, 0)
+TEST$High_spent_Medium_value_payments <- ifelse(TEST$Payment_Behaviour == "High_spent_Medium_value_payments", 1, 0)
+TEST$High_spent_Small_value_payments <- ifelse(TEST$Payment_Behaviour == "High_spent_Small_value_payments", 1, 0)
+TEST$Low_spent_Large_value_payments <- ifelse(TEST$Payment_Behaviour == "Low_spent_Large_value_payments", 1, 0)
+TEST$Low_spent_Medium_value_payments <- ifelse(TEST$Payment_Behaviour == "Low_spent_Medium_value_payments", 1, 0)
+TEST$Low_spent_Small_value_payments <- ifelse(TEST$Payment_Behaviour == "Low_spent_Small_value_payments", 1, 0)
+TEST$Payment_Behaviour <- NULL
+
 
 # Dropping columns that won't be used in the model
 TRAIN$Name <- NULL
@@ -118,21 +139,27 @@ HOLDOUT$SSN <- NULL
 HOLDOUT$Occupation <- NULL
 HOLDOUT$Type_of_Loan <- NULL
 
+TEST$Name <- NULL
+TEST$Month <- NULL
+TEST$SSN <- NULL
+TEST$Occupation <- NULL
+TEST$Type_of_Loan <- NULL
+
 
 # Figure out what NM is and what to do with it
 #TRAIN$Payment_of_Min_Amount <- as.factor(TRAIN$Payment_of_Min_Amount)
 TRAIN$Payment_of_Min_Amount <- NULL
 HOLDOUT$Payment_of_Min_Amount <- NULL
-
-
-# Create Credit_Score column for HOLDOUT data, to eventually be filled with predictions
-HOLDOUT$Credit_Score <- as.factor(rep(0, nrow(HOLDOUT)))
+TEST$Payment_of_Min_Amount <- NULL
 
 
 # write.csv(TRAIN, "Cleaned_TRAIN.csv", row.names = F)
 # write.csv(HOLDOUT, "Cleaned_HOLDOUT.csv", row.names = F)
+# write.csv(TEST, "Cleaned_TEST.csv", row.names = F)
+
 
 ```
+
 
 ```{r Cleaned Data}
 
@@ -146,22 +173,30 @@ CleanHOLDOUT$Credit_Score <- as.factor(CleanHOLDOUT$Credit_Score)
 CleanHOLDOUT$Credit_Mix <- as.factor(CleanHOLDOUT$Credit_Mix)
 ```
 
-ML Modeling
+
+
+**ML Modeling**
 
 ```{r Decision Tree}
-TREE <- rpart(Credit_Score~,data=CleanTRAIN) # Create Decision Tree Model
+TREE <- rpart(Credit_Score~. -ID -Customer_ID,data=CleanTRAIN) # Create Decision Tree Model
 visualize_model(TREE) # Visualize Decision Tree Model
 ```
 
 
 ```{r GLM}
 # Tune parameters for GLM
-fitControl <- trainControl(method="cv",number=5) 
+fitControl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  allowParallel = TRUE,
+  summaryFunction = twoClassSummary
+)
 
 # Create GLM model
-GLM <-train(Credit_Score~.,
+GLM <-train(Credit_Score~. -ID -Customer_ID,
             data = CleanTRAIN,
-            trControl=fitControl,
+            trControl= fitControl,
             preProc=c("center","scale"),
             method = "glm")
 
@@ -169,12 +204,23 @@ GLM$results
 varImp(GLM) # variable importance of GLM
 plot(varImp(GLM)) # Visualization for GLM model
 ```
+
+
 ```{r GLMNET}
 # Tune parameters for GLMNET
 glmnetGrid <- expand.grid(alpha = seq(0,1,.1),lambda = 10^seq(-5,-1,by=0.25))
 
+fitControl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  allowParallel = TRUE,
+  summaryFunction = twoClassSummary
+)
+
+
 # Create GLMNET model
-GLMNET <- train(Credit_Score~.,
+GLMNET <- train(Credit_Score~. - ID - Customer_ID,
                 data = CleanTRAIN,
                 trControl=fitControl,
                 preProc=c("center","scale"),
@@ -189,10 +235,18 @@ plot(GLMNET) # Visualization for RPART model
 ```{r Rpart}
 # Tune parameters for RPART
 rpartGrid <- expand.grid(cp=10^seq(-5,-1,by=0.2))
-fitControl <- trainControl(method="cv",number=5) 
+
+fitControl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  allowParallel = TRUE,
+  summaryFunction = twoClassSummary
+)
+
 
 # Create RPART model
-RPART <- train(Credit_Score~.,
+RPART <- train(Credit_Score~. -ID -Customer_ID,
                data = CleanTRAIN,
                trControl=fitControl,
                preProc=c("center","scale"),
@@ -216,7 +270,7 @@ rownames(TRAININGresults) <- c('GLM','GLMNET','RPART')
 
 TRAININGresults
 
-
+# Visualizations for ROC, Sens (true positive), Spec (true negative)
 results <- resamples(list(GLM=GLM, GLMNET=GLMNET, RPART=RPART))
 scales <- list(x=list(relation="free"), y=list(relation="free"))
 bwplot(results, scales=scales)
@@ -226,61 +280,85 @@ bwplot(results, scales=scales)
 summary(diff(results))
 
 
-# # Holdout Results comparison
-# HOLDOUTresults <- rbind(
-#   postResample(predict(GLM,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score),
-#   postResample(predict(GLMNET,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score),
-#   postResample(predict(RPART,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score)
-# )
-# 
-# rownames(HOLDOUTresults) <- c('GLM','GLMNET','RPART')
-# 
-# HOLDOUTresults
+# Holdout Results comparison
+HOLDOUTresults <- rbind(
+  postResample(predict(GLM,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score),
+  postResample(predict(GLMNET,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score),
+  postResample(predict(RPART,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score) # Highest Accuracy
+)
 
+rownames(HOLDOUTresults) <- c('GLM','GLMNET','RPART')
 
-```
-
-
-```{r SVM}
-# # SVM model parameters
-# svmGrid <- expand.grid(C=10^seq(-3.5,-1.5,by=.5))
-# fitControl <- trainControl(method="cv")
-# 
-# SVM <- train(Credit_Score~.,
-#                data = TRAIN,
-#                trControl=fitControl,
-#                preProc=c("center","scale"),
-#                method = "svmLinear",
-#                tuneGrid=svmGrid) # create SVM Model
-# 
-# SVM$results # View results from SVM model
-```
-
-
-```{r KNN}
-# fitControl <- trainControl(method="cv",number=5) 
-# 
-# # KNN
-# train(Credit_Score ~ .,
-#       data=TRAIN,
-#       method='knn',
-#       trControl = fitControl)
+# Results of Holdout testing
+HOLDOUTresults
 
 ```
 
 
-```{r Random Forest}
-# # # Tune parameters for Random Forest
-# forestGrid <- expand.grid(mtry=c(1,3,5))
-# fitControl <- trainControl(method="cv",number=5)
-# 
-# FOREST <- train(Credit_Score~.,
-#                data = TRAIN,
-#                trControl=fitControl,
-#                preProc=c("center","scale"),
-#                method = "rf",
-#                tuneGrid=forestGrid) # Create Random Forrest Model
-# 
-# FOREST$results[rownames(FOREST$bestTune),]
-# plot(FOREST) # Visualize Random Forest Model
+```{r Creating Final Test Data Set}
+Test_Backup <- read.csv("test.csv")
+TEST <- Test_Backup
+
+# Lad in data and change data types for predict() function
+CleanTEST <- read.csv("Cleaned_TEST.csv")
+CleanTEST$Credit_Score <- as.factor(rep(0, nrow(CleanTEST)))
+CleanTEST$Credit_Mix <- as.factor(CleanTEST$Credit_Mix)
+
+# predict credit scores with our best model
+CleanTEST$Credit_Score <- predict(RPART,newdata=CleanTEST)
+
+# creating new data frame to merge with original holdout to get info on customers
+
+TestCreditScores <- CleanTEST %>% select(ID, Credit_Score)
+
+# writes csv with the CleanTEST data (including predicted credit scores)
+# write.csv(CleanTEST, "CleanTEST.csv", row.names = F)
+
+
+# make sure all IDs are unique before merging data on variable
+length(unique(TEST$ID)) == length(unique(TestCreditScores$ID))
+
+# creates data frame with original test data and the new credit predictions
+FinalTestData <- merge(TEST, TestCreditScores, by = c("ID" = "ID"))
+# write.csv(FinalTestData, "FinalTestData.csv", row.names = F)
+
 ```
+
+
+```{r Further Data Analysis}
+# Load in final data set with tested values
+FinalTestData <- read.csv("FinalTestData.csv")
+
+# Each customer in this new data set is observed 4 times, rather than 8 like the training data
+test <- FinalTestData %>% group_by(Customer_ID) %>%  summarise(numObservations = n())
+table(test$numObservations)
+
+
+# We want to look at the final month for each customer to see if their credit is acceptable or not
+FinalMonth <- seq(from = 4, to = nrow(FinalTestData), length.out = nrow(FinalTestData)/4)
+#subsetting the data to only take the last month of each customer
+CustFinalMonth <- FinalTestData[FinalMonth,]
+
+
+# This value shows us that 70.688% of customers have an acceptable Credit Score rating
+mean(CustFinalMonth$Credit_Score == "Acceptable")
+
+# Bar plot of Credit score rating by occupation
+ggplot(data = CustFinalMonth, aes(x = Occupation, color = Credit_Score)) + geom_bar() +theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+# filtered data of all records with Acceptable Credit score rating
+Acceptable <- CustFinalMonth %>% filter(Credit_Score == "Acceptable")
+
+# filtered data of all records with Unacceptable Credit score rating
+Unacceptable <- CustFinalMonth %>% filter(Credit_Score == "Unacceptable")
+
+hist(Acceptable$Annual_Income)
+median(Acceptable$Annual_Income)
+
+hist(Unacceptable$Annual_Income)
+median(Unacceptable$Annual_Income)
+
+```
+
+
