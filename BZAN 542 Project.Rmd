@@ -29,6 +29,7 @@ Test_Backup <- read.csv("test.csv")
 TEST <- Test_Backup
 
 # Splitting Data into Training and Holdout sets
+set.seed(542) # set the seed so it is the same TRAIN and HOLDOUT for whoever runs the code
 train.rows <- sample(1:nrow(DATA), .7*nrow(DATA))
 
 TRAIN <- DATA[train.rows,]
