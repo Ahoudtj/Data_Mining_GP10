@@ -39,6 +39,8 @@ HOLDOUT <-  DATA[-train.rows,]
 
 
 
+**Data Exploration**
+
 ```{r Data Exploration}
 # Data is broken down by customer.
 DATA[which(DATA$Customer_ID == 3392),]
@@ -68,6 +70,9 @@ Some questions to think about:
 
 -How does occupation affect credit scores?
 
+
+**Data Cleaning**
+
 ```{r Data Cleaning}
 # We received data for both training and testing. 
 # The Training data was split into the HOLDOUT and TRAIN data sets seen here
@@ -87,7 +92,7 @@ TEST$Customer_ID <- as.factor(TEST$Customer_ID)
 
 
 # Group Good and Standard Credit to be "Acceptable" and leave bad as "Unacceptable"
-table(TRAIN$Credit_Score)
+# table(TRAIN$Credit_Score)
 TRAIN$Credit_Score <- as.factor(ifelse(TRAIN$Credit_Score == "Poor", "Unacceptable", "Acceptable"))
 HOLDOUT$Credit_Score <- as.factor(ifelse(HOLDOUT$Credit_Score == "Poor", "Unacceptable", "Acceptable"))
 # Poor credit score would be acceptable, good or standard would be unacceptable
@@ -259,6 +264,8 @@ plot(RPART) # Visualization for RPART model
 ```
 
 
+**Testing and Comparing Models**
+
 ```{r Results}
 # Training results comparison
 TRAININGresults <- rbind(
@@ -296,6 +303,8 @@ HOLDOUTresults
 ```
 
 
+**Creating Final Test Data Set**
+
 ```{r Creating Final Test Data Set}
 Test_Backup <- read.csv("test.csv")
 TEST <- Test_Backup
@@ -326,6 +335,8 @@ FinalTestData <- merge(TEST, TestCreditScores, by = c("ID" = "ID"))
 ```
 
 
+**Further Data Analysis**
+
 ```{r Further Data Analysis}
 # Load in final data set with tested values
 FinalTestData <- read.csv("FinalTestData.csv")
@@ -341,7 +352,7 @@ FinalMonth <- seq(from = 4, to = nrow(FinalTestData), length.out = nrow(FinalTes
 CustFinalMonth <- FinalTestData[FinalMonth,]
 
 
-# This value shows us that 70.688% of customers have an acceptable Credit Score rating
+# This value shows us that 71.936% of customers have an acceptable Credit Score rating
 mean(CustFinalMonth$Credit_Score == "Acceptable")
 
 # Bar plot of Credit score rating by occupation
@@ -354,11 +365,13 @@ Acceptable <- CustFinalMonth %>% filter(Credit_Score == "Acceptable")
 # filtered data of all records with Unacceptable Credit score rating
 Unacceptable <- CustFinalMonth %>% filter(Credit_Score == "Unacceptable")
 
+# Income metrics for Acceptable credit score customers
 hist(Acceptable$Annual_Income)
-median(Acceptable$Annual_Income)
+summary(Acceptable$Annual_Income)
 
+# Income metrics for Unacceptable credit score customers
 hist(Unacceptable$Annual_Income)
-median(Unacceptable$Annual_Income)
+summary(Unacceptable$Annual_Income)
 
 ```
 
