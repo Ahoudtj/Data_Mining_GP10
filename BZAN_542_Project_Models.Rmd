@@ -1,0 +1,181 @@
+---
+title: "ML Modeling"
+author: "Group 10"
+link: https://www.kaggle.com/datasets/clkmuhammed/creditscoreclassification
+---
+
+```{r}
+library(regclass)  
+library(rpart)
+library(randomForest)
+library(gbm)
+library(caret)
+library(pROC)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(mlbench)
+
+# Cleaned data
+CleanTRAIN <- read.csv("Cleaned_TRAIN.csv")
+CleanTRAIN$Credit_Score <- as.factor(CleanTRAIN$Credit_Score)
+CleanTRAIN$Credit_Mix <- as.factor(CleanTRAIN$Credit_Mix)
+
+CleanHOLDOUT <- read.csv("Cleaned_HOLDOUT.csv")
+CleanHOLDOUT$Credit_Score <- as.factor(CleanHOLDOUT$Credit_Score)
+CleanHOLDOUT$Credit_Mix <- as.factor(CleanHOLDOUT$Credit_Mix)
+
+```
+
+
+```{r Decision Tree}
+TREE <- rpart(Credit_Score~. -ID -Customer_ID,data=CleanTRAIN) # Create Decision Tree Model
+visualize_model(TREE) # Visualize Decision Tree Model
+```
+
+
+```{r GLM}
+# Tune parameters for GLM
+fitControl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  allowParallel = TRUE,
+  summaryFunction = twoClassSummary
+)
+
+# Create GLM model
+GLM <-train(Credit_Score~. -ID -Customer_ID,
+            data = CleanTRAIN,
+            trControl= fitControl,
+            preProc=c("center","scale"),
+            method = "glm")
+
+GLM$results
+varImp(GLM) # variable importance of GLM
+plot(varImp(GLM)) # Visualization for GLM model
+```
+
+
+
+```{r GLMNET}
+# Tune parameters for GLMNET
+glmnetGrid <- expand.grid(alpha = seq(0,1,.1),lambda = 10^seq(-5,-1,by=0.25))
+
+fitControl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  allowParallel = TRUE,
+  summaryFunction = twoClassSummary
+)
+
+
+# Create GLMNET model
+GLMNET <- train(Credit_Score~. - ID - Customer_ID,
+                data = CleanTRAIN,
+                trControl=fitControl,
+                preProc=c("center","scale"),
+                method = "glmnet",
+                tuneGrid=glmnetGrid)
+
+GLMNET$results[rownames(GLMNET$bestTune),] # finding best results from GLMNET model
+plot(GLMNET) # Visualization for RPART model
+```
+
+
+
+```{r Rpart}
+# Tune parameters for RPART
+rpartGrid <- expand.grid(cp=10^seq(-5,-1,by=0.2))
+
+fitControl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  allowParallel = TRUE,
+  summaryFunction = twoClassSummary
+)
+
+
+# Create RPART model
+RPART <- train(Credit_Score~. -ID -Customer_ID,
+               data = CleanTRAIN,
+               trControl=fitControl,
+               preProc=c("center","scale"),
+               method = "rpart",
+               tuneGrid=rpartGrid) 
+
+RPART$results[rownames(RPART$bestTune),] # finding best results from RPART model
+plot(RPART) # Visualization for RPART model
+```
+
+
+
+```{r Results}
+# Training results comparison
+TRAININGresults <- rbind(
+  GLM$results[c("ROC","Sens", "Spec", "ROCSD", "SensSD", "SpecSD")],
+  GLMNET$results[which.max(GLMNET$results$ROC),c("ROC","Sens", "Spec", "ROCSD", "SensSD", "SpecSD")],
+  RPART$results[which.max(RPART$results$ROC),c("ROC","Sens", "Spec", "ROCSD", "SensSD", "SpecSD")]
+)
+
+rownames(TRAININGresults) <- c('GLM','GLMNET','RPART')
+
+TRAININGresults
+
+# Visualizations for ROC, Sens (true positive), Spec (true negative)
+results <- resamples(list(GLM=GLM, GLMNET=GLMNET, RPART=RPART))
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+bwplot(results, scales=scales)
+
+
+# difference in model predictions, summarize p-values for pair-wise comparisons
+summary(diff(results))
+
+
+# Holdout Results comparison
+HOLDOUTresults <- rbind(
+  postResample(predict(GLM,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score),
+  postResample(predict(GLMNET,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score),
+  postResample(predict(RPART,newdata=CleanHOLDOUT),CleanHOLDOUT$Credit_Score) # Highest Accuracy
+)
+
+rownames(HOLDOUTresults) <- c('GLM','GLMNET','RPART')
+
+# Results of Holdout testing
+HOLDOUTresults
+
+```
+
+
+```{r Creating Final Test Data Set}
+# creating new data frame to merge with original holdout to get info on customers
+
+Test_Backup <- read.csv("test.csv")
+TEST <- Test_Backup
+
+# Lad in data and change data types for predict() function
+CleanTEST <- read.csv("Cleaned_TEST.csv")
+CleanTEST$Credit_Score <- as.factor(rep(0, nrow(CleanTEST)))
+CleanTEST$Credit_Mix <- as.factor(CleanTEST$Credit_Mix)
+
+# predict credit scores with our best model
+CleanTEST$Credit_Score <- predict(RPART,newdata=CleanTEST)
+
+# creating new data frame to merge with original holdout to get info on customers
+
+TestCreditScores <- CleanTEST %>% select(ID, Credit_Score)
+
+# writes csv with the CleanTEST data (including predicted credit scores)
+# write.csv(CleanTEST, "CleanTEST.csv", row.names = F)
+
+
+# make sure all IDs are unique before merging data on variable
+length(unique(TEST$ID)) == length(unique(TestCreditScores$ID))
+
+# creates data frame with original test data and the new credit predictions
+FinalTestData <- merge(TEST, TestCreditScores, by = c("ID" = "ID"))
+# write.csv(FinalTestData, "FinalTestData.csv", row.names = F)
+```
+
