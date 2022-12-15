@@ -365,13 +365,41 @@ Acceptable <- CustFinalMonth %>% filter(Credit_Score == "Acceptable")
 # filtered data of all records with Unacceptable Credit score rating
 Unacceptable <- CustFinalMonth %>% filter(Credit_Score == "Unacceptable")
 
-# Income metrics for Acceptable credit score customers
-hist(Acceptable$Annual_Income)
+# Income metrics 
 summary(Acceptable$Annual_Income)
-
-# Income metrics for Unacceptable credit score customers
-hist(Unacceptable$Annual_Income)
 summary(Unacceptable$Annual_Income)
+
+Aincome <- hist(Acceptable$Annual_Income)
+Uincome <- hist(Unacceptable$Annual_Income)
+
+A1 <- rgb(255,0,0, max = 255, alpha = 80, names = "lt.red")
+U2 <- rgb(0,0,153,max = 255, alpha = 80, names = "lt.blue")
+
+
+plot(Aincome, col = A1, xlab = "Income", main = "Income by Credit Score");plot(Uincome, add = TRUE, col = U2);legend("topright", c("Acceptable", "Unacceptable"), fill=c("pink", "light blue"))
+
+
+# Debt metrics and visualizations
+summary(Acceptable$Outstanding_Debt)
+summary(Unacceptable$Outstanding_Debt)
+
+hA <- hist(Acceptable$Outstanding_Debt)
+hU <- hist(Unacceptable$Outstanding_Debt)
+
+A1 <- rgb(255,0,0, max = 255, alpha = 80, names = "lt.red")
+U2 <- rgb(0,0,153,max = 255, alpha = 80, names = "lt.blue")
+
+
+plot(hA, col = A1, xlab = "Outstanding Debt", main = "Credit Score Outstanding Debt");plot(hU, add = TRUE, col = U2);legend("topright", c("Acceptable", "Unacceptable"), fill=c("pink", "light blue"))
+
+
+# Interest rate visualizations
+summary(Acceptable$Interest_Rate)
+summary(Unacceptable$Interest_Rate)
+
+(Acceptable$Interest_Rate)
+
+ggplot(data = CustFinalMonth, aes(x = Interest_Rate, color = Credit_Score)) + geom_histogram()
 
 ```
 
